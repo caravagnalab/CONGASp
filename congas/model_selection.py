@@ -19,7 +19,7 @@ def calc_entropy(x):
     entr = torch.zeros(x.shape[1])
 
     for i in range(x.shape[1]):
-            entr[i] = torch.sum(x[:, i] + torch.log(x[:, i] + 1e-10))
+            entr[i] = torch.sum(x[:, i]*torch.log(x[:, i] + 1e-10))
     return entr.sum()
 
 

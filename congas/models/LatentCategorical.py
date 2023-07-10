@@ -214,7 +214,8 @@ class LatentCategorical(Model):
 
             #reconstruction_penalty = 0
             lk_total = self._params['lambda'] * lk_rna + (1-self._params['lambda']) * lk_atac
-
+            print('!!!!')
+            print(reconstruction_penalty)
             pyro.factor("lk", lk_total - reconstruction_penalty)
 
 
@@ -321,24 +322,19 @@ class LatentCategorical(Model):
         segment_fact = torch.matmul(segment_fact.reshape([I, 1]),
                                     cat_vector.reshape([1, self._params['hidden_dim']]))
 
+        cc_argmax = inf_params["CNV_probabilities"]
+        
+        # cc_ones = torch.argmax(inf_params["CNV_probabilities"], dim=-1)
 
-        cc_ones = torch.argmax(inf_params["CNV_probabilities"], dim=-1)
+        # cc_argmax = torch.zeros_like(inf_params["CNV_probabilities"])
 
-        cc_argmax = torch.zeros_like(inf_params["CNV_probabilities"])
-
-
-        for i in range(cc_argmax.shape[0]):
-            for j in range(cc_argmax.shape[1]):
-                cc_argmax[i,j,cc_ones[i,j]] = 1
-
+        # for i in range(cc_argmax.shape[0]):
+        #     for j in range(cc_argmax.shape[1]):
+        #         cc_argmax[i,j,cc_ones[i,j]] = 1
 
         segment_fact_marg = segment_fact * cc_argmax
 
-
-
         segment_fact_marg = torch.sum(segment_fact_marg, dim=-1)
-
-
 
         if self._params["likelihood_{}".format(mod)] == "NB":
 

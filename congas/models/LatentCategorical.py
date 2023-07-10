@@ -214,8 +214,6 @@ class LatentCategorical(Model):
 
             #reconstruction_penalty = 0
             lk_total = self._params['lambda'] * lk_rna + (1-self._params['lambda']) * lk_atac
-            print('!!!!')
-            print(reconstruction_penalty)
             pyro.factor("lk", lk_total - reconstruction_penalty)
 
 

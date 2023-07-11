@@ -41,6 +41,8 @@ class Interface:
         
         if self._CUDA:
             torch.set_default_tensor_type('torch.cuda.FloatTensor')
+        else:
+            torch.set_default_tensor_type('torch.FloatTensor')
         
         # Dictonary of dictionaries. The first key indicates the training step and each entry is the % difference for every parameter
         self.params_history = {}

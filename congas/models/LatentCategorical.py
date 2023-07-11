@@ -130,9 +130,11 @@ class LatentCategorical(Model):
 
                 cc[cc<1e-10] = 1e-10
 
-
-                gumble = tdist.Gumbel(0, 1).sample(cc.shape)
-                cc_argmax = ((torch.log(cc) + gumble) / Temperature).softmax(-1)
+                # cc_argmax  = pyro.sample("CNV", dist.RelaxedOneHotCategoricalStraightThrough(Temperature, cc))
+                
+                cc_argmax = torch.nn.functional.gumbel_softmax(cc, tau = Temperature, hard=True)
+                # gumble = tdist.Gumbel(0, 1).sample(cc.shape)
+                # cc_argmax = ((torch.log(cc) + gumble) / Temperature).softmax(-1)
 
 
         lk_rna = 0

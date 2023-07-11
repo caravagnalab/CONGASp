@@ -9,6 +9,7 @@ A set of Pyro models and an interface for simultaneous CNV clustering and infere
 from congas.Interface import Interface
 from congas.utils import *
 from congas.model_selection import *
+from congas.simulate_data import simulate_data_congas
 import os
 
 

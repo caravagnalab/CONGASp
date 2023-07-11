@@ -7,8 +7,11 @@ The core of the package just provides class with functions to make every model b
 
 
 import pyro
+import torch
+
 from pyro.infer import SVI
 from tqdm import trange
+
 
 from congas.building_blocks import *
 from congas.model_selection import *
@@ -24,7 +27,7 @@ class Interface:
 
 
     """
-    def __init__(self,model = None, optimizer = None, loss = None, inf_type = SVI):
+    def __init__(self,model = None, optimizer = None, loss = None, inf_type = SVI, CUDA = False):
         self._model_fun = model
         self._optimizer = optimizer
         self._loss = loss
@@ -34,6 +37,11 @@ class Interface:
         self._guide_trained = None
         self._loss_trained = None
         self._model_string = None
+        self._CUDA = CUDA
+        
+        if self._CUDA:
+            torch.set_default_tensor_type('torch.cuda.FloatTensor')
+        
         # Dictonary of dictionaries. The first key indicates the training step and each entry is the % difference for every parameter
         self.params_history = {}
 
@@ -72,6 +80,8 @@ class Interface:
         self._loss = loss
 
     def set_model_params(self, param_dict):
+        if self._CUDA:
+            param_dict['CUDA'] = True
         self._model.set_params(param_dict)
 
     def run(self, steps,param_optimizer = {'lr' : 0.05}, e = 0.01, patience = 5, param_loss = None, seed = 3):
@@ -200,9 +210,12 @@ class Interface:
 
         print("Computing assignment probabilities", flush=True)
         discrete_params = self._model.calculate_cluster_assignements(params)
-
-        trained_params_dict = {i : params[i].detach().numpy() for i in params}
-        discrete_params = {i : discrete_params[i].detach().numpy() for i in discrete_params}
+        if self._CUDA:
+            trained_params_dict = {i : params[i].cpu().detach().numpy() for i in params}
+            discrete_params = {i : discrete_params[i].cpu().detach().numpy() for i in discrete_params}
+        else:
+            trained_params_dict = {i : params[i].detach().numpy() for i in params}
+            discrete_params = {i : discrete_params[i].detach().numpy() for i in discrete_params}
 
         all_params =  {**trained_params_dict,**discrete_params}
 
@@ -248,12 +261,18 @@ class Interface:
         BIC = calc_BIC(lk, n_params, N)
         entropy = self._model._params["lambda"] * entropy_rna + (1- self._model._params["lambda"]) * entropy_atac
         ICL = calc_ICL(lk, n_params, N, entropy)
-
-        ret = {"NLL" : -lk.detach().numpy(), "AIC" : AIC.detach().numpy(),
-               "BIC" : BIC.detach().numpy(), "ICL" : ICL.detach().numpy(),
-               "entropy" : entropy.detach().numpy(),
-               "NLL_rna" : -lk_rna.detach().numpy(), "NLL_atac" : -lk_atac.detach().numpy(),
-               "n_params" : n_params, "n_observations" : N}
+        if self._CUDA:
+            ret = {"NLL" : -lk.cpu().detach().numpy(), "AIC" : AIC.cpu().detach().numpy(),
+                       "BIC" : BIC.cpu().detach().numpy(), "ICL" : ICL.cpu().detach().numpy(),
+                       "entropy" : entropy.cpu().detach().numpy(),
+                       "NLL_rna" : -lk_rna.cpu().detach().numpy(), "NLL_atac" : -lk_atac.cpu().detach().numpy(),
+                       "n_params" : n_params, "n_observations" : N}
+        else:
+            ret = {"NLL" : -lk.detach().numpy(), "AIC" : AIC.detach().numpy(),
+                   "BIC" : BIC.detach().numpy(), "ICL" : ICL.detach().numpy(),
+                   "entropy" : entropy.detach().numpy(),
+                   "NLL_rna" : -lk_rna.detach().numpy(), "NLL_atac" : -lk_atac.detach().numpy(),
+                   "n_params" : n_params, "n_observations" : N}
 
         return ret
 

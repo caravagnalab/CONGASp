@@ -20,7 +20,7 @@ class LatentCategorical(Model):
               'batch_size': None, "init_probs" : 5, 'norm_init_sd_rna' : None, "norm_init_sd_atac" : None,
               'mixture': None, "nb_size_init_atac": None,"nb_size_init_rna": None, "binom_prior_limits" : [10,10000],
               "likelihood_rna" : "NB", "likelihood_atac" : "NB", 'lambda' : 0, "latent_type" : "D", "Temperature" : 1/100,
-              "equal_sizes_sd" : True, "purity" : None, "equal_mixture_weights" : False}
+              "equal_sizes_sd" : True, "purity" : None, "equal_mixture_weights" : False, "CUDA" : False}
 
     data_name = set(['data_rna', 'data_atac', 'pld', 'segments', 'norm_factor_rna', 'norm_factor_atac'])
 
@@ -129,6 +129,8 @@ class LatentCategorical(Model):
                 cc = pyro.sample("CNV_probabilities", dist.Dirichlet(self._params['probs']))
 
                 cc[cc<1e-10] = 1e-10
+                
+                #print(cc)
 
 
                 gumble = tdist.Gumbel(0, 1).sample(cc.shape)
@@ -214,8 +216,6 @@ class LatentCategorical(Model):
 
             #reconstruction_penalty = 0
             lk_total = self._params['lambda'] * lk_rna + (1-self._params['lambda']) * lk_atac
-            print('!!!!')
-            print(reconstruction_penalty)
             pyro.factor("lk", lk_total - reconstruction_penalty)
 
 
@@ -284,12 +284,15 @@ class LatentCategorical(Model):
 
         X = (data / sf)
         X = X / nf
-        X = X.detach().numpy()
-
+        if self._params['CUDA']:
+            X = X.cpu().detach().numpy()
+        else:
+            X = X.detach().numpy()
+        
         kmat = torch.zeros(self._params['K'], I)
 
         for i in range(len(self._data['pld'])):
-            km = KMeans(n_clusters=self._params['K'], random_state=0).fit(X[i,].reshape(-1, 1))
+            km = KMeans(n_clusters=self._params['K'], random_state=0, n_init = "auto").fit(X[i,].reshape(-1, 1))
             centers = torch.tensor(km.cluster_centers_).flatten()
             for k in range(self._params['K']):
                 kmat[k, i] = centers[k]
@@ -355,6 +358,7 @@ class LatentCategorical(Model):
                 lk = lk.sum(dim=1) + torch.log(inf_params["mixture_weights_{}".format(mod)]).reshape([len(inf_params["mixture_weights_{}".format(mod)]), 1])
             lk = log_sum_exp(lk).sum()
 
+        
         return lk
 
 

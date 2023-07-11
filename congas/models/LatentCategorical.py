@@ -130,13 +130,10 @@ class LatentCategorical(Model):
 
                 cc[cc<1e-10] = 1e-10
                 
-                #print(cc)
-
-                # cc_argmax  = pyro.sample("CNV", dist.RelaxedOneHotCategoricalStraightThrough(Temperature, cc))
-                
-                cc_argmax = torch.nn.functional.gumbel_softmax(cc, tau = Temperature, hard=True)
-                # gumble = tdist.Gumbel(0, 1).sample(cc.shape)
-                # cc_argmax = ((torch.log(cc) + gumble) / Temperature).softmax(-1)
+                # cc_argmax = torch.nn.functional.gumbel_softmax(cc, tau = Temperature, hard=False)
+                # print(cc_argmax)
+                gumble = tdist.Gumbel(0, 1).sample(cc.shape)
+                cc_argmax = ((torch.log(cc) + gumble) / Temperature).softmax(-1)
 
 
         lk_rna = 0
@@ -313,7 +310,7 @@ class LatentCategorical(Model):
 
 
 
-    def likelihood(self, inf_params, mod = "rna",sum = False):
+    def likelihood(self, inf_params, mod = "rna",sum = False, assignments = False):
 
         I, N = self._data['data_{}'.format(mod)].shape
         cat_vector = torch.tensor(np.arange(1,self._params['hidden_dim'] + 1).copy(), dtype=torch.float)
@@ -327,15 +324,16 @@ class LatentCategorical(Model):
         segment_fact = torch.matmul(segment_fact.reshape([I, 1]),
                                     cat_vector.reshape([1, self._params['hidden_dim']]))
 
-        cc_argmax = inf_params["CNV_probabilities"]
-        
-        # cc_ones = torch.argmax(inf_params["CNV_probabilities"], dim=-1)
+        if assignments:
+            cc_ones = torch.argmax(inf_params["CNV_probabilities"], dim=-1)
 
-        # cc_argmax = torch.zeros_like(inf_params["CNV_probabilities"])
+            cc_argmax = torch.zeros_like(inf_params["CNV_probabilities"])
 
-        # for i in range(cc_argmax.shape[0]):
-        #     for j in range(cc_argmax.shape[1]):
-        #         cc_argmax[i,j,cc_ones[i,j]] = 1
+            for i in range(cc_argmax.shape[0]):
+                for j in range(cc_argmax.shape[1]):
+                    cc_argmax[i,j,cc_ones[i,j]] = 1
+        else:
+            cc_argmax = inf_params["CNV_probabilities"]
 
         segment_fact_marg = segment_fact * cc_argmax
 
@@ -371,7 +369,7 @@ class LatentCategorical(Model):
 
         if 'data_rna' in self._data:
             I, N = self._data['data_rna'].shape
-            lk = self.likelihood(inf_params, "rna")
+            lk = self.likelihood(inf_params, "rna", assignments=True)
             # p(z_i| D, X ) = lk(z_i) * p(z_i | X) / sum_z_i(lk(z_i) * p(z_i | X))
             # log(p(z_i| D, X )) = log(lk(z_i)) + log(p(z_i | X)) - log_sum_exp(log(lk(z_i)) + log(p(z_i | X)))
             if self._params['equal_mixture_weights']:
@@ -391,7 +389,7 @@ class LatentCategorical(Model):
 
         if 'data_atac' in self._data:
             I, M = self._data['data_atac'].shape
-            lk = self.likelihood(inf_params, "atac")
+            lk = self.likelihood(inf_params, "atac", assignments=True)
             if self._params['equal_mixture_weights']:
                 lk = torch.sum(lk, dim=1) + torch.log(inf_params["mixture_weights"]).reshape([self._params['K'], 1])
             else:

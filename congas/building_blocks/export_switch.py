@@ -1,6 +1,6 @@
 def export_switch(x):
     export = ["CNV_probabilities"]
-    if  x._params['equal_mixture_weights']:
+    if  x._params['equal_mixture_weights'] or x._params['multiome']:
         export.append("mixture_weights")
     if 'data_rna' in x._data:
         if not x._params['equal_mixture_weights']:

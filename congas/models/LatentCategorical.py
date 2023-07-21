@@ -20,7 +20,7 @@ class LatentCategorical(Model):
               'batch_size': None, "init_probs" : 5, 'norm_init_sd_rna' : None, "norm_init_sd_atac" : None,
               'mixture': None, "nb_size_init_atac": None,"nb_size_init_rna": None, "binom_prior_limits" : [10,10000],
               "likelihood_rna" : "NB", "likelihood_atac" : "NB", 'lambda' : 0, "latent_type" : "D", "Temperature" : 1/100,
-              "equal_sizes_sd" : True, "purity" : None, "equal_mixture_weights" : False, "CUDA" : False}
+              "equal_sizes_sd" : True, "purity" : None, "equal_mixture_weights" : False, "CUDA" : False, "multiome" : False}
 
     data_name = set(['data_rna', 'data_atac', 'pld', 'segments', 'norm_factor_rna', 'norm_factor_atac'])
 
@@ -30,6 +30,9 @@ class LatentCategorical(Model):
         super().__init__(data_dict, self.data_name)
 
     def model(self,i = 1,  *args, **kwargs):
+        
+        if self._params['multiome']:
+            self._params['equal_mixture_weights']  = True
 
         Temperature = self._params['Temperature'] / np.log2(i + 0.1)
 
@@ -369,19 +372,19 @@ class LatentCategorical(Model):
 
         if 'data_rna' in self._data:
             I, N = self._data['data_rna'].shape
-            lk = self.likelihood(inf_params, "rna", assignments=True)
+            lk_rna = self.likelihood(inf_params, "rna", assignments=True)
             # p(z_i| D, X ) = lk(z_i) * p(z_i | X) / sum_z_i(lk(z_i) * p(z_i | X))
             # log(p(z_i| D, X )) = log(lk(z_i)) + log(p(z_i | X)) - log_sum_exp(log(lk(z_i)) + log(p(z_i | X)))
             if self._params['equal_mixture_weights']:
-                lk = torch.sum(lk, dim=1) + torch.log(inf_params["mixture_weights"]).reshape([self._params['K'], 1])
+                lk_rna = torch.sum(lk_rna, dim=1) + torch.log(inf_params["mixture_weights"]).reshape([self._params['K'], 1])
             else:
-                lk = torch.sum(lk, dim=1) + torch.log(inf_params["mixture_weights_rna"]).reshape([self._params['K'], 1])
-
-            summed_lk = log_sum_exp(lk)
-            ret_rna = lk - summed_lk
-            ret_rna = torch.exp(ret_rna)
-            res["assignment_probs_rna"] = ret_rna
-            res["assignment_rna"] = torch.argmax(ret_rna, axis = 0)
+                lk_rna = torch.sum(lk_rna, dim=1) + torch.log(inf_params["mixture_weights_rna"]).reshape([self._params['K'], 1])
+            if not self._params['multiome']:
+                summed_lk = log_sum_exp(lk_rna)
+                ret_rna = lk_rna - summed_lk
+                ret_rna = torch.exp(ret_rna)
+                res["assignment_probs_rna"] = ret_rna
+                res["assignment_rna"] = torch.argmax(ret_rna, axis = 0)
 
 
 
@@ -389,17 +392,30 @@ class LatentCategorical(Model):
 
         if 'data_atac' in self._data:
             I, M = self._data['data_atac'].shape
-            lk = self.likelihood(inf_params, "atac", assignments=True)
+            lk_atac = self.likelihood(inf_params, "atac", assignments=True)
             if self._params['equal_mixture_weights']:
-                lk = torch.sum(lk, dim=1) + torch.log(inf_params["mixture_weights"]).reshape([self._params['K'], 1])
+                lk_atac = torch.sum(lk_atac, dim=1) + torch.log(inf_params["mixture_weights"]).reshape([self._params['K'], 1])
             else:
-                lk = torch.sum(lk, dim=1) + torch.log(inf_params["mixture_weights_atac"]).reshape([self._params['K'], 1])
+                lk_atac = torch.sum(lk_atac, dim=1) + torch.log(inf_params["mixture_weights_atac"]).reshape([self._params['K'], 1])
+            if not self._params['multiome']:
+                summed_lk = log_sum_exp(lk_atac)
+                ret_atac = lk_atac - summed_lk
 
+                ret_atac = torch.exp(ret_atac)
+                res["assignment_probs_atac"] = ret_atac
+                res["assignment_atac"] = torch.argmax(ret_atac, axis = 0)
+            
+        if self._params['multiome']:
+            lk = self._params['lambda'] * lk_rna + (1-self._params['lambda']) * lk_atac
             summed_lk = log_sum_exp(lk)
-            ret_atac = lk - summed_lk
+            ret = lk - summed_lk
 
-            ret_atac = torch.exp(ret_atac)
-            res["assignment_probs_atac"] = ret_atac
-            res["assignment_atac"] = torch.argmax(ret_atac, axis = 0)
+            ret = torch.exp(ret)
+            res["assignment_probs_atac"] = ret
+            res["assignment_atac"] = torch.argmax(ret, axis = 0)
+            
+            res["assignment_probs_rna"] = ret
+            res["assignment_rna"] = torch.argmax(ret, axis = 0)
+
 
         return res

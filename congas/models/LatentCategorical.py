@@ -20,7 +20,8 @@ class LatentCategorical(Model):
               'batch_size': None, "init_probs" : 5, 'norm_init_sd_rna' : None, "norm_init_sd_atac" : None,
               'mixture': None, "nb_size_init_atac": None,"nb_size_init_rna": None, "binom_prior_limits" : [10,10000],
               "likelihood_rna" : "NB", "likelihood_atac" : "NB", 'lambda' : 0, "latent_type" : "D", "Temperature" : 1/100,
-              "equal_sizes_sd" : True, "purity" : None, "equal_mixture_weights" : False, "CUDA" : False, "multiome" : False}
+              "equal_sizes_sd" : True, "purity" : None, "equal_mixture_weights" : False, "CUDA" : False, "multiome" : False,
+              "normal_cells" : False}
 
     data_name = set(['data_rna', 'data_atac', 'pld', 'segments', 'norm_factor_rna', 'norm_factor_atac'])
 
@@ -292,20 +293,24 @@ class LatentCategorical(Model):
             X = X.detach().numpy()
         
         kmat = torch.zeros(self._params['K'], I)
+        
+        km = KMeans(n_clusters=self._params['K'], random_state=0, n_init = "auto").fit(X.T)
+        kmat = torch.tensor(km.cluster_centers_)
 
-        for i in range(len(self._data['pld'])):
-            km = KMeans(n_clusters=self._params['K'], random_state=0, n_init = "auto").fit(X[i,].reshape(-1, 1))
-            centers = torch.tensor(km.cluster_centers_).flatten()
-            for k in range(self._params['K']):
-                kmat[k, i] = centers[k]
-
+        if self._params['normal_cells']:
+            diploid_cluster = sum((torch.round(kmat) == 2).T).argmax()
+        else:
+            diploid_cluster = -1
+        
         init = torch.zeros(self._params['K'], I, self._params['hidden_dim'])
 
         for i in range(len(self._data['pld'])):
             for j in range(self._params['hidden_dim']):
                 for k in range(self._params['K']):
-                    if k == 0:
-                        init[k, i, j] = high_prob if (j + 1) == torch.round(kmat[k,i]) else low_prob
+                    # if k == 0:
+                    #     init[k, i, j] = high_prob if (j + 1) == torch.round(kmat[k,i]) else low_prob
+                    if k == diploid_cluster:
+                        init[k, i, j] = 0.9 if (j + 1) == torch.round(kmat[k,i]) else (1 - 0.9) / (self._params['hidden_dim'] - 1)
                     else:
                         init[k, i, j] = high_prob if (j + 1) == torch.round(kmat[k,i]) else low_prob
 

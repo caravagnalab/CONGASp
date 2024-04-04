@@ -313,7 +313,7 @@ class LatentCategorical(Model):
                         init[k, i, j] = 0.9 if (j + 1) == torch.tensor(2) else (1 - 0.9) / (self._params['hidden_dim'] - 1)
                     else:
                         init[k, i, j] = high_prob if (j + 1) == torch.round(kmat[k,i]) else low_prob
-        print(init)
+
         return init
 
 

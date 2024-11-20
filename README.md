@@ -17,7 +17,7 @@ Currently providing:
 -->
 To install:
 
-`$ pip install congas`
+`$ pip install git+https://github.com/caravagnalab/CONGASp`
 
 <!--
 To run a simple analysis on the example data
